@@ -1,6 +1,7 @@
 # Maintainer: Yang Kun <ikspress@outlook.com>
 
 _realname=libjudy
+_forkver=netdata2
 pkgbase=mingw-w64-${_realname}
 pkgname="${MINGW_PACKAGE_PREFIX}-${_realname}"
 pkgver=1.0.5
@@ -11,18 +12,17 @@ mingw_arch=('mingw64' 'ucrt64' 'clang64' 'clangarm64')
 license=('spdx:LGPL-2.1-or-later')
 makedepends=("${MINGW_PACKAGE_PREFIX}-cc")
 url='http://judy.sourceforge.net'
-source=("https://github.com/netdata/libjudy/archive/v${pkgver}-netdata2/${_realname}-${pkgver}-netdata2.tar.gz"
+source=("https://github.com/netdata/libjudy/archive/v${pkgver}-${_forkver}/${_realname}-${pkgver}-${_forkver}.tar.gz"
         "0001-judy-no-undefined.patch"
-        "0002-fix-warnings.patch"
-        "01_notrans_man.patch"
-        "02_remove_duplicate_man.patch"
-        "03_add_man_section_to_filename.patch")
-sha512sums=('dc689e6d198aafb4409217fd5fc24abca799aeca8369779e2c0742d3a5723fa9584c1710b04951c1a9948d33045e6437662b519c3e52f9f4cbfd6a512c900b0d'
-            '14c29e450dd975d80cd3f61dded621c1213e587e13b38ca96426c62310f0487e0d07a7c6feff65d5fa08d5064adf46abdc2c46fb45ad72cc0530e5da2f8e02cc'
-            '378e50a5c7f6c71d894038caea477d52a90c6d7348b3b779e79d8119d2930035447d8050cfc44b19abd270cd8d1d27e7fb0b05f1c55ef8e29c6808826b78aa1f'
-            '93b82f2aa56ce462b667ae5e5d98dff6953002616d4c5894b7e4fe817aa48d3bc9730200c0067dd599681a7b9714262da0c8d8f3cda12c5ff5e1c7943b9012d9'
-            '72ceccd40b801964e115ee4e2793e46854d8adeb0606b83af1fd2c0b0540e4393e966d95078261bf7b3257344fdc9a99fa964a365c04a42c40ab6aa9fe4d76c1'
-            '4914833420f6c9c1ae52199f996654d2ad1f183531636e8acdd0114cd0f5f4c39a529f067e35d2d6ffed3449324b7b0b8552435c5014e2422df9c8e80520c240')
+        # https://sourceforge.net/p/judy/patches/6/
+        "https://sourceforge.net/p/judy/patches/6/attachment/0001-automake-Makefile.am-use-relocatable-srcdir-when-app.patch"
+        "https://sourceforge.net/p/judy/patches/6/attachment/0002-doc-Makefile.am-mkdir-p-man-man3-and-parallel-buildi.patch"
+        "https://sourceforge.net/p/judy/patches/6/attachment/0003-Win64-Fixup-WORD_T-and-UL-suffixes-for-llp64-data-mo.patch")
+sha256sums=('e623a06bf091758b43f5cd97c3609f8109442d1a0441bc44819b60f2861c61b1'
+            '4ab00dee64c79c3296ae7bc12429411bf7e361aedd583f268c0ad40c2083080e'
+            '96e0ad7536f45e9bbbf2f6e9f6de12f74f1a9c349fcbd0d44db52b3c1231140a'
+            '73da528014ee64b239d5db2aaf3d69682424e9cf6318dbc034e2e52e05deecff'
+            '30dfe143bda003cbcfe90d90328f8caf8122406145d7c03f3c1b19620a11359f')
 
 apply_patch_with_msg() {
   for _patch in "$@"; do
@@ -32,42 +32,40 @@ apply_patch_with_msg() {
 }
 
 prepare() {
-  cd "${_realname}-${pkgver}-netdata2"
+  cd "${_realname}-${pkgver}-${_forkver}"
 
-  # Taken from https://sources.debian.org/patches/judy/1.0.5-5.1/
+  apply_patch_with_msg 0001-judy-no-undefined.patch
+
+  # Apply patches taken from SourceForge
   apply_patch_with_msg \
-    01_notrans_man.patch \
-    02_remove_duplicate_man.patch \
-    03_add_man_section_to_filename.patch
-
-  # Improve portability
-  apply_patch_with_msg \
-    0001-judy-no-undefined.patch \
-    0002-fix-warnings.patch
-
-  # Fixes directory not exist
-  mkdir -p doc/man/man3
+    0001-automake-Makefile.am-use-relocatable-srcdir-when-app.patch \
+    0002-doc-Makefile.am-mkdir-p-man-man3-and-parallel-buildi.patch \
+    0003-Win64-Fixup-WORD_T-and-UL-suffixes-for-llp64-data-mo.patch
 
   autoreconf -fi
 }
 
 build() {
-  cd "${_realname}-${pkgver}-netdata2"
+  mkdir -p "build-${MSYSTEM}" && cd "build-${MSYSTEM}"
 
-  ./configure \
+  ../${_realname}-${pkgver}-${_forkver}/configure \
     --prefix="${MINGW_PREFIX}" \
     --build="${MINGW_CHOST}" \
     --host="${MINGW_CHOST}" \
     --target="${MINGW_CHOST}"
 
-  # Parallel make is broken
-  make -j1
+  make
 }
 
 package() {
-  cd "${_realname}-${pkgver}-netdata2"
+  cd "build-${MSYSTEM}"
 
   make install DESTDIR="${pkgdir}"
 
-  install -Dm644 "COPYING" -t "${pkgdir}${MINGW_PREFIX}/share/licenses/${_realname}"
+  # Add section number to file extension
+  for file in "${pkgdir}${MINGW_PREFIX}/share/man/man3/"*; do
+    mv "${file}" "${file%.*}.3"
+  done
+
+  install -Dm644 "${srcdir}/${_realname}-${pkgver}-${_forkver}/COPYING" -t "${pkgdir}${MINGW_PREFIX}/share/licenses/${_realname}"
 }
